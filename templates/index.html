@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Charity Monitor Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body { background-color: #1a1a1a; color: #eee; }
+        .screen-slot { border: 2px solid #444; height: 350px; background: #000; display: flex; align-items: center; justify-content: center; position: relative; border-radius: 8px; }
+        .screen-slot img { width: 100%; height: 100%; object-fit: contain; }
+        .slot-label { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.8); color: #00ff00; padding: 4px 12px; font-size: 14px; border-radius: 4px; font-weight: bold; }
+        .card { background: #2d2d2d; border: 1px solid #444; color: #eee; }
+        .list-group-item { background: #2d2d2d; border-color: #444; color: #eee; }
+    </style>
+</head>
+<body>
+    <div class="container-fluid p-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="text-primary">Monitoring - Live View</h2>
+            <div>
+                <button class="btn btn-outline-info me-2" data-bs-toggle="modal" data-bs-target="#sqlModal">Setup Database</button>
+                <a href="/download_client" class="btn btn-primary">Share Client (.exe)</a>
+            </div>
+        </div>
+
+        <!-- SQL Setup Modal -->
+        <div class="modal fade" id="sqlModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content bg-dark text-white">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Supabase SQL Setup</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Copy and paste this into your Supabase SQL Editor to create the necessary table:</p>
+                        <pre class="bg-black p-3 rounded text-info"><code>CREATE TABLE devices (
+    hostname TEXT PRIMARY KEY,
+    nickname TEXT,
+    ip TEXT,
+    specs TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- 4-Screen Grid -->
+            <div class="col-lg-9">
+                <div class="row g-3">
+                    <div class="col-6"><div class="screen-slot" id="slot-1"><div class="slot-label">SLOT 1</div><img id="img-slot-1"></div></div>
+                    <div class="col-6"><div class="screen-slot" id="slot-2"><div class="slot-label">SLOT 2</div><img id="img-slot-2"></div></div>
+                    <div class="col-6"><div class="screen-slot" id="slot-3"><div class="slot-label">SLOT 3</div><img id="img-slot-3"></div></div>
+                    <div class="col-6"><div class="screen-slot" id="slot-4"><div class="slot-label">SLOT 4</div><img id="img-slot-4"></div></div>
+                </div>
+            </div>
+
+            <!-- Management Sidebar -->
+            <div class="col-lg-3">
+                <div class="card shadow mb-3">
+                    <div class="card-header bg-primary text-white font-weight-bold">Connected Devices</div>
+                    <div class="list-group list-group-flush" id="device-list" style="max-height: 500px; overflow-y: auto;">
+                        <!-- Devices will appear here -->
+                    </div>
+                </div>
+                
+                <div class="card shadow">
+                    <div class="card-header bg-secondary text-white font-weight-bold">Instructions</div>
+                    <div class="card-body small">
+                        1. Update <code>.env</code> with Supabase credentials.<br>
+                        2. Run the SQL in the "Setup Database" button.<br>
+                        3. Share the <code>.exe</code> with children.<br>
+                        4. Nicknames will be saved permanently!
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const socket = io();
+        let assignments = { 'slot-1': null, 'slot-2': null, 'slot-3': null, 'slot-4': null };
+
+        socket.on('update_device_list', (devices) => {
+            const list = document.getElementById('device-list');
+            list.innerHTML = '';
+            for (let id in devices) {
+                const d = devices[id];
+                list.innerHTML += `
+                    <div class="list-group-item p-3">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <h6 class="mb-0">${d.nickname}</h6>
+                                <small class="text-muted">${d.name} | ${d.ip}</small><br>
+                                <small class="text-info" style="font-size: 10px;">${d.specs}</small>
+                            </div>
+                            <button class="btn btn-sm btn-link text-primary p-0" onclick="rename('${id}')">Rename</button>
+                        </div>
+                        <select class="form-select form-select-sm bg-dark text-white border-secondary" onchange="assign('${id}', this.value)">
+                            <option value="">View in Slot...</option>
+                            <option value="slot-1">Slot 1</option>
+                            <option value="slot-2">Slot 2</option>
+                            <option value="slot-3">Slot 3</option>
+                            <option value="slot-4">Slot 4</option>
+                        </select>
+                    </div>`;
+            }
+        });
+
+        socket.on('display_frame', (data) => {
+            for (let slot in assignments) {
+                if (assignments[slot] === data.device_id) {
+                    document.getElementById('img-' + slot).src = 'data:image/jpeg;base64,' + data.frame;
+                }
+            }
+        });
+
+        function assign(deviceId, slot) {
+            if (slot) assignments[slot] = deviceId;
+        }
+
+        function rename(id) {
+            const name = prompt("Enter a nickname for this child's computer:");
+            if (name) socket.emit('update_nickname', { device_id: id, nickname: name });
+        }
+    </script>
+</body>
+</html>
