@@ -7,3 +7,7 @@ build/
 .env
 .trae/
 memory/
+*.mp4
+*.jpg
+*.txt
+!requirements.txt

